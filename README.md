@@ -1,0 +1,2 @@
+# Kasir-taichan
+Kasir HP
