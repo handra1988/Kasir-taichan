@@ -195,9 +195,65 @@
         .card-report.active {
             display: block;
         }
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .report-toggle {
+            display: flex;
+            gap: 5px;
+            background: #f0f0f0;
+            padding: 4px;
+            border-radius: 6px;
+        }
+        .report-toggle button {
+            border: none;
+            background: transparent;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            color: #666;
+        }
+        .report-toggle button.active {
+            background: white;
+            color: #198754;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
         .table { 
             font-size: 14px; 
             margin-bottom: 0;
+        }
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .summary-row:last-child {
+            border-bottom: none;
+        }
+        .summary-item-name {
+            font-weight: 600;
+            flex: 1;
+        }
+        .summary-qty {
+            text-align: center;
+            min-width: 50px;
+            color: #6c757d;
+        }
+        .summary-total {
+            text-align: right;
+            min-width: 110px;
+            font-weight: 600;
+            color: #198754;
         }
         .delete-btn { 
             color: #dc3545; 
@@ -318,9 +374,12 @@
 
         <!-- Daily Report Section -->
         <div id="reportSection" class="card-report">
-            <div class="d-flex justify-content-between mb-3">
+            <div class="report-header">
                 <strong><i class="bi bi-graph-up"></i> Rincian Hari Ini</strong>
-                <button class="btn-close" onclick="switchTab('cart')"></button>
+                <div class="report-toggle">
+                    <button class="active" onclick="setReportMode('summary')">Ringkas</button>
+                    <button onclick="setReportMode('detail')">Detail</button>
+                </div>
             </div>
             <div id="dailyContent"></div>
         </div>
@@ -347,6 +406,7 @@
         let rawData = null;
         let cart = {}; // { menuName: { price, quantity, itemObj } }
         let isSubmitting = false;
+        let reportMode = 'summary'; // 'summary' or 'detail'
 
         document.addEventListener('DOMContentLoaded', () => {
             initializeMenu();
@@ -568,43 +628,97 @@
             document.getElementById('quickTotal').innerText = "Rp " + total.toLocaleString('id-ID');
         }
 
+        function setReportMode(mode) {
+            reportMode = mode;
+            document.querySelectorAll('.report-toggle button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            loadDaily();
+        }
+
         async function loadDaily() {
             const content = document.getElementById('dailyContent');
             const hariIni = new Date().toDateString();
             let html = '';
             let hasData = false;
             
-            if (rawData) {
-                Object.entries(rawData).reverse().forEach(([id, item]) => {
-                    if (new Date(item.tanggal).toDateString() === hariIni) {
-                        hasData = true;
-                        if (html === '') {
-                            html = '<table class="table"><tbody>';
+            if (reportMode === 'summary') {
+                // Mode Ringkas - Summary per item
+                const summary = {};
+                
+                if (rawData) {
+                    Object.entries(rawData).forEach(([id, item]) => {
+                        if (new Date(item.tanggal).toDateString() === hariIni) {
+                            hasData = true;
+                            if (!summary[item.menu]) {
+                                summary[item.menu] = {
+                                    qty: 0,
+                                    total: 0,
+                                    price: item.harga
+                                };
+                            }
+                            summary[item.menu].qty++;
+                            summary[item.menu].total += item.harga;
                         }
-                        html += `
-                            <tr>
-                                <td>${item.menu}</td>
-                                <td style="font-weight:600;">Rp ${item.harga.toLocaleString('id-ID')}</td>
-                                <td>
-                                    <button class="delete-btn" onclick="deleteItem('${id}')">
-                                        <i class="bi bi-trash3"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        `;
-                    }
-                });
-            }
+                    });
+                }
 
-            if (!hasData) {
-                content.innerHTML = `
-                    <div class="empty-state">
-                        <i class="bi bi-inbox"></i>
-                        <p>Belum ada transaksi hari ini</p>
-                    </div>
-                `;
+                if (!hasData) {
+                    content.innerHTML = `
+                        <div class="empty-state">
+                            <i class="bi bi-inbox"></i>
+                            <p>Belum ada transaksi hari ini</p>
+                        </div>
+                    `;
+                } else {
+                    html = '<div>';
+                    Object.entries(summary).forEach(([menuName, data]) => {
+                        html += `
+                            <div class="summary-row">
+                                <div class="summary-item-name">${menuName}</div>
+                                <div class="summary-qty">${data.qty}x</div>
+                                <div class="summary-total">Rp ${data.total.toLocaleString('id-ID')}</div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    content.innerHTML = html;
+                }
             } else {
-                content.innerHTML = html + '</tbody></table>';
+                // Mode Detail - Transaksi satu per satu
+                if (rawData) {
+                    Object.entries(rawData).reverse().forEach(([id, item]) => {
+                        if (new Date(item.tanggal).toDateString() === hariIni) {
+                            hasData = true;
+                            if (html === '') {
+                                html = '<table class="table"><tbody>';
+                            }
+                            html += `
+                                <tr>
+                                    <td>${item.menu}</td>
+                                    <td style="font-weight:600;">Rp ${item.harga.toLocaleString('id-ID')}</td>
+                                    <td>
+                                        <button class="delete-btn" onclick="deleteItem('${id}')">
+                                            <i class="bi bi-trash3"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        }
+                    });
+                }
+
+                if (!hasData) {
+                    content.innerHTML = `
+                        <div class="empty-state">
+                            <i class="bi bi-inbox"></i>
+                            <p>Belum ada transaksi hari ini</p>
+                        </div>
+                    `;
+                } else {
+                    content.innerHTML = html + '</tbody></table>';
+                }
             }
         }
 
